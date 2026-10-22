@@ -64,7 +64,7 @@ function buildChair() {
   const group = new THREE.Group();
 
   const seat = part(
-    new THREE.ExtrudeGeometry(roundedRect(0.98, 0.92, 0.14), {
+    new THREE.ExtrudeGeometry(roundedRect(0.98, 0.94, 0.14), {
       depth: 0.06, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 4, curveSegments: 24,
     }).rotateX(-Math.PI / 2).translate(0, 0.9, 0),
     'body',
@@ -86,18 +86,21 @@ function buildChair() {
   const legGeometry = new THREE.CylinderGeometry(0.04, 0.03, 0.9, 20);
   const postGeometry = new THREE.CylinderGeometry(0.035, 0.03, 1.8, 20);
   const railAcross = new THREE.CylinderGeometry(0.018, 0.018, 0.8, 12).rotateZ(Math.PI / 2);
-  const railAlong = new THREE.CylinderGeometry(0.018, 0.018, 0.72, 12).rotateX(Math.PI / 2);
+  const railAlong = new THREE.CylinderGeometry(0.018, 0.018, 0.8, 12).rotateX(Math.PI / 2);
 
+  // The back panel's walls sit at z -0.398 .. -0.3225 at x = +-0.4 (the bevel
+  // widens the extrude by 0.01). The posts stay fully behind that: their front
+  // edge is at -0.405.
   for (const x of [-0.4, 0.4]) {
     const leg = part(legGeometry, 'accent');
     leg.position.set(x, 0.45, 0.36);
     const post = part(postGeometry, 'accent');
-    post.position.set(x, 0.9, -0.36);
+    post.position.set(x, 0.9, -0.44);
     const side = part(railAlong, 'accent');
-    side.position.set(x, 0.3, 0);
+    side.position.set(x, 0.3, -0.04);
     group.add(leg, post, side);
   }
-  for (const z of [-0.36, 0.36]) {
+  for (const z of [-0.44, 0.36]) {
     const rail = part(railAcross, 'accent');
     rail.position.set(0, 0.3, z);
     group.add(rail);

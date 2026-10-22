@@ -35,7 +35,9 @@ export function encodeHash(state) {
   params.set('body', state.body);
   params.set('accent', state.accent);
   params.set('mat', state.material);
-  if (state.monogram) {
+  // Same rule as computePrice and the decal: a monogram with no initials is
+  // not a monogram, so it is not shared as one.
+  if (state.monogram && state.text) {
     params.set('mono', '1');
     params.set('text', state.text);
   }
@@ -55,8 +57,9 @@ export function decodeHash(hash, valid) {
   if (valid.materials.has(material)) patch.material = material;
   if (params.has('mono')) {
     patch.monogram = params.get('mono') === '1';
-    const text = sanitizeMonogram(params.get('text'));
-    if (text) patch.text = text;
+    // An empty string is a valid restored value; it must not fall back to the
+    // default initials.
+    patch.text = sanitizeMonogram(params.get('text'));
   }
   return patch;
 }
@@ -192,9 +195,11 @@ export function createPanel(root, { products, colors, materials, pricing, onChan
     materialGroup.fieldset,
     monogramGroup,
     viewGroup,
-    priceBlock,
-    el('div', { class: 'actions' }, [downloadButton, shareButton]),
-    status,
+    el('div', { class: 'panel-foot' }, [
+      priceBlock,
+      el('div', { class: 'actions' }, [downloadButton, shareButton]),
+      status,
+    ]),
   );
 
   const sheetTitle = document.getElementById('sheet-title');
@@ -225,19 +230,33 @@ export function createPanel(root, { products, colors, materials, pricing, onChan
       sheetTitle.textContent = product.name;
       sheetPrice.textContent = total;
     },
-    setStatus(message) {
-      status.textContent = message;
+    // A plain message clears itself after 4 s. With `sticky` it stays until the
+    // next status. With `link` the URL is shown in a readonly field, selected
+    // and ready to copy, and it also stays.
+    setStatus(message, { sticky = false, link = '' } = {}) {
       clearTimeout(statusTimer);
-      statusTimer = setTimeout(() => { status.textContent = ''; }, 4000);
+      status.replaceChildren(message);
+      if (link) {
+        const field = el('input', {
+          type: 'text', class: 'status-link', readonly: '', value: link, 'aria-label': 'Share link',
+        });
+        field.addEventListener('focus', () => field.select());
+        status.append(field);
+        field.focus();
+        field.select();
+      }
+      if (!sticky && !link) statusTimer = setTimeout(() => { status.textContent = ''; }, 4000);
     },
   };
 }
 
 export function initSheet(panel, stage) {
   const button = panel.querySelector('.sheet-toggle');
+  const cue = panel.querySelector('.sheet-cue');
   const setOpen = (open) => {
     panel.classList.toggle('is-open', open);
     button.setAttribute('aria-expanded', String(open));
+    cue.textContent = open ? 'Close' : 'Customize';
   };
   button.addEventListener('click', () => setOpen(!panel.classList.contains('is-open')));
   stage.addEventListener('pointerdown', () => setOpen(false));

@@ -43,7 +43,7 @@ The panel reads both files, so nothing else changes.
 
 ## Tests
 
-`test/e2e.spec.mjs` runs on Node's built-in test runner with Playwright. It starts a local server, opens the app in headless Chromium and checks real WebGL draw calls, the pricing table, hash restore, the share link, the PNG download and both layouts. Screenshots land in `test/out/`.
+`test/unit.spec.mjs` covers the pure helpers (hash encode and decode, monogram sanitizing, pricing) with no browser. `test/e2e.spec.mjs` runs on Node's built-in test runner with Playwright. It starts a local server, opens the app in headless Chromium and checks real WebGL draw calls, the pricing table, hash restore, the share link and its no-clipboard fallback, the PNG download, the chair geometry and both layouts. Screenshots land in `test/out/`.
 
 ```
 npm install

@@ -97,9 +97,13 @@ function applyFinish(material, hex) {
   material.needsUpdate = true;
 }
 
-function contrastColor(hex) {
+// Picks the monogram ink from the surface colour and its finish. A metal
+// surface reads darker than its swatch because most of what you see is the
+// room reflection, so mid tones like sage, brass and clay get light ink under
+// Metal while bone and sand keep dark ink.
+function contrastColor(hex, preset) {
   const c = new THREE.Color(hex);
-  const luminance = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+  const luminance = (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) * (preset.metalness ? 0.45 : 1);
   return luminance < 0.2 ? '#f7f3ea' : '#1c1b18';
 }
 
@@ -143,7 +147,7 @@ function placeDecal() {
   decal = new THREE.Mesh(
     new DecalGeometry(target, position, orientation, size),
     new THREE.MeshStandardMaterial({
-      map: monogramTexture(state.text, contrastColor(surfaceHex)),
+      map: monogramTexture(state.text, contrastColor(surfaceHex, presetsById.get(state.material))),
       transparent: true,
       depthWrite: false,
       polygonOffset: true,
@@ -191,7 +195,7 @@ function update(patch = {}) {
   applyFinish(materials.accent, colorsById.get(state.accent).hex);
 
   const wantsDecal = state.monogram && state.text.length > 0;
-  const decalChanged = ['product', 'body', 'accent', 'text'].some((k) => state[k] !== prev[k]);
+  const decalChanged = ['product', 'body', 'accent', 'material', 'text'].some((k) => state[k] !== prev[k]);
   if (!wantsDecal) removeDecal();
   else if (!decal || decalChanged) placeDecal();
 
@@ -227,7 +231,9 @@ async function share() {
     await navigator.clipboard.writeText(url);
     panel.setStatus('Link copied to clipboard');
   } catch {
-    panel.setStatus(`Copy this link: ${url}`);
+    // No clipboard access (http, an iframe without the permission, an old
+    // browser). Show the link in a field that stays until the next status.
+    panel.setStatus('Copy this link:', { link: url });
   }
 }
 
@@ -242,6 +248,16 @@ const panel = createPanel(panelRoot, {
 });
 initSheet(document.getElementById('panel'), stage);
 document.getElementById('reset-view').addEventListener('click', resetView);
+
+// Phones have no scroll wheel, so the hint and the canvas label say pinch there.
+const coarsePointer = matchMedia('(pointer: coarse)');
+function setHint() {
+  const zoom = coarsePointer.matches ? 'pinch' : 'scroll';
+  stage.querySelector('.stage-hint').textContent = `Drag to rotate, ${zoom} to zoom`;
+  canvas.setAttribute('aria-label', `3D view of the product. Drag to rotate, ${zoom} to zoom.`);
+}
+setHint();
+coarsePointer.addEventListener('change', setHint);
 
 function resize() {
   const { clientWidth: width, clientHeight: height } = stage;

@@ -147,6 +147,68 @@ test('copy share link puts the current URL on the clipboard', async () => {
   await context.close();
 });
 
+test('share link falls back to a field that stays when the clipboard is blocked', async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: () => Promise.reject(new Error('blocked')) },
+    });
+  });
+  const { page, errors } = await openApp(context, '#p=backpack&body=clay&accent=sand&mat=matte');
+  await page.locator('#share').click();
+  const field = page.locator('#status .status-link');
+  await field.waitFor();
+  assert.equal(await field.inputValue(), await page.evaluate(() => location.href));
+  assert.ok(await field.evaluate((el) => el.selectionEnd - el.selectionStart === el.value.length), 'link is pre-selected');
+  await page.waitForTimeout(4500);
+  assert.ok(await field.isVisible(), 'the link stays past the 4 s status timer');
+  assert.match(await page.locator('#status').textContent(), /Copy this link/);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('chair back posts sit behind the back panel and the monogram survives a finish change', async () => {
+  const context = await browser.newContext();
+  const { page, errors } = await openApp(context, '#p=chair&body=sage&accent=brass&mat=matte&mono=1&text=JI');
+  const clearances = await page.evaluate(async () => {
+    const { PRODUCTS } = await import(new URL('src/products.js', location.href).href);
+    const { group, decal } = PRODUCTS.find((p) => p.id === 'chair').build();
+    group.updateMatrixWorld(true);
+    const pos = decal.target.geometry.attributes.position;
+    const posts = [];
+    group.traverse((node) => {
+      if (node.isMesh && node !== decal.target && node.geometry.parameters?.height === 1.8) posts.push(node);
+    });
+    const out = [];
+    for (const post of posts) {
+      const r = post.geometry.parameters.radiusTop;
+      for (const dx of [-0.03, 0, 0.03]) {
+        const x = post.position.x + dx;
+        const postFront = post.position.z + Math.sqrt(r * r - dx * dx);
+        let panelBack = Infinity;
+        for (let i = 0; i < pos.count; i++) {
+          if (Math.abs(pos.getX(i) - x) < 0.01) panelBack = Math.min(panelBack, pos.getZ(i));
+        }
+        out.push({ x: Number(x.toFixed(3)), postFront, panelBack, clearance: panelBack - postFront });
+      }
+    }
+    return out;
+  });
+  assert.equal(clearances.length, 6);
+  for (const c of clearances) assert.ok(c.clearance > 0.003, `post at x=${c.x} is behind the panel: ${JSON.stringify(c)}`);
+
+  await page.evaluate(() => window.configurator.setState({ autoRotate: false }));
+  await page.locator('#reset-view').click();
+  await page.waitForTimeout(100);
+  await page.screenshot({ path: path.join(outDir, 'chair-mono.png') });
+
+  await page.locator('input[name="material"][value="metal"]').check({ force: true });
+  await page.waitForTimeout(100);
+  await page.screenshot({ path: path.join(outDir, 'chair-metal-mono.png') });
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('download PNG saves a real image of the view', async () => {
   const context = await browser.newContext({ acceptDownloads: true });
   const { page } = await openApp(context, '#p=mug&body=navy&accent=brass&mat=gloss&mono=1&text=JI');
@@ -163,27 +225,61 @@ test('download PNG saves a real image of the view', async () => {
 
 test('desktop and phone layouts render and screenshot', async () => {
   const context = await browser.newContext();
-  const desktop = await openApp(context, '#p=mug&body=navy&accent=clay&mat=gloss&mono=1&text=JI');
-  await desktop.page.locator('label[for="auto-rotate"]').click();
-  assert.ok(!(await desktop.page.locator('#auto-rotate').isChecked()));
-  await desktop.page.screenshot({ path: path.join(outDir, 'screenshot.png') });
+  const desktop = await openApp(context, '#p=mug&body=navy&accent=brass&mat=gloss&mono=1&text=JI');
   const panelBox = await desktop.page.locator('#panel').boundingBox();
   assert.ok(panelBox.x > 800, 'panel sits to the right on desktop');
   assert.ok(!(await desktop.page.locator('.sheet-toggle').isVisible()));
-  assert.deepEqual(desktop.errors, []);
-  await desktop.page.close();
+  assert.equal(await desktop.page.locator('.stage-hint').textContent(), 'Drag to rotate, scroll to zoom');
 
-  const phone = await openApp(context, '#p=chair&body=sage&accent=bone&mat=matte', { width: 390, height: 844 });
+  // Price and both actions are in view at 1280x800 before any scrolling.
+  const inView = async (selector) => {
+    const box = await desktop.page.locator(selector).boundingBox();
+    return box !== null && box.y >= 0 && box.y + box.height <= 800;
+  };
+  for (const selector of ['#price-total', '#download', '#share']) {
+    assert.ok(await inView(selector), `${selector} is above the fold`);
+  }
+  // All eight swatches of each group sit on one row.
+  for (const name of ['body', 'accent']) {
+    const rows = await desktop.page.locator(`input[name="${name}"] + .swatch-dot`).evaluateAll(
+      (dots) => new Set(dots.map((dot) => Math.round(dot.getBoundingClientRect().top))).size,
+    );
+    assert.equal(rows, 1, `${name} swatches on one row`);
+  }
+
+  await desktop.page.locator('label[for="auto-rotate"]').click();
+  assert.ok(!(await desktop.page.locator('#auto-rotate').isChecked()));
+  await desktop.page.locator('#reset-view').click();
+  await desktop.page.evaluate(() => document.getElementById('panel').scrollTo(0, 0));
+  await desktop.page.waitForTimeout(100);
+  await desktop.page.screenshot({ path: path.join(outDir, 'screenshot.png') });
+  await desktop.page.emulateMedia({ colorScheme: 'dark' });
+  await desktop.page.waitForTimeout(500); // let the 150 ms colour transitions finish
+  await desktop.page.screenshot({ path: path.join(outDir, 'desktop-dark.png') });
+  assert.deepEqual(desktop.errors, []);
+  await context.close();
+
+  const phoneContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const phone = await openApp(phoneContext, '#p=chair&body=sage&accent=bone&mat=matte', { width: 390, height: 844 });
+  assert.ok(await phone.page.evaluate(() => matchMedia('(pointer: coarse)').matches), 'phone context has a coarse pointer');
+  assert.equal(await phone.page.locator('.stage-hint').textContent(), 'Drag to rotate, pinch to zoom');
+  assert.match(await phone.page.locator('canvas#view').getAttribute('aria-label'), /pinch to zoom/);
   const toggle = phone.page.locator('.sheet-toggle');
+  const cue = phone.page.locator('.sheet-cue');
   assert.ok(await toggle.isVisible());
   assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(await cue.textContent(), 'Customize');
   await phone.page.screenshot({ path: path.join(outDir, 'screenshot-phone.png') });
   await toggle.click();
   assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
+  assert.equal(await cue.textContent(), 'Close');
   await phone.page.waitForTimeout(400);
   await phone.page.screenshot({ path: path.join(outDir, 'screenshot-phone-open.png') });
   const width = await phone.page.evaluate(() => document.documentElement.scrollWidth);
   assert.ok(width <= 390, `no horizontal overflow, scrollWidth ${width}`);
+  await toggle.click();
+  assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(await cue.textContent(), 'Customize');
   assert.deepEqual(phone.errors, []);
-  await context.close();
+  await phoneContext.close();
 });
