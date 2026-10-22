@@ -1,0 +1,19 @@
+{
+  "currency": "USD",
+  "products": {
+    "mug": { "base": 18, "material": { "matte": 0, "gloss": 4, "metal": 14 } },
+    "chair": { "base": 149, "material": { "matte": 0, "gloss": 20, "metal": 75 } },
+    "backpack": { "base": 89, "material": { "matte": 0, "gloss": 10, "metal": 30 } }
+  },
+  "monogram": 9,
+  "colors": [
+    { "id": "navy", "name": "Navy", "hex": "#1f3a5f", "extra": 0 },
+    { "id": "clay", "name": "Clay", "hex": "#b4532a", "extra": 0 },
+    { "id": "sage", "name": "Sage", "hex": "#7a8f6a", "extra": 0 },
+    { "id": "sand", "name": "Sand", "hex": "#d8c6a3", "extra": 0 },
+    { "id": "charcoal", "name": "Charcoal", "hex": "#2b2b2e", "extra": 0 },
+    { "id": "bone", "name": "Bone", "hex": "#efe9dc", "extra": 0 },
+    { "id": "brass", "name": "Brass", "hex": "#c9a227", "extra": 6 },
+    { "id": "oxblood", "name": "Oxblood", "hex": "#5a1f24", "extra": 6 }
+  ]
+}

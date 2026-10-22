@@ -1,0 +1,16 @@
+{
+  "name": "product-configurator-3d",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Browser 3D product configurator: colors, materials, monogram, live price, shareable links. Three.js, no build step.",
+  "license": "MIT",
+  "author": "Jeffrey Inman",
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m http.server 8080 --bind 127.0.0.1",
+    "test": "node --test test/"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0"
+  }
+}
